@@ -1,20 +1,23 @@
-# Hamony_Web_Dev
-Online Learning App Read Me
-Welcome to our Online Learning App! 
-This application is designed to provide learners with access to a wide range of learning materials, assessments, and the ability to interact with instructors seamlessly. 
-Below, you'll find important information about our application setup and usage.
+Car Trading Platform README
+
+Introduction
+Welcome to our Car Trading Platform! This application serves as a platform to connect car buyers and sellers. It facilitates the listing of cars for sale, browsing available listings, and contacting sellers for further inquiries or purchases.
+
+Technologies Used
+Our application utilizes the following technologies:
+Frontend:
+•	React: A JavaScript library for building user interfaces.
+•	HTML/CSS: For structuring and styling the user interface.
+
+Backend:
+•	Flask: A lightweight WSGI web application framework in Python.
+•	MySQL: A relational database management system used to store user and car data.
+•	Flask-CORS: A Flask extension for handling Cross-Origin Resource Sharing (CORS) issues.
 
 Features
-Access to Learning Materials: Users can access a variety of learning materials such as videos, documents, quizzes, and interactive tutorials.
-Assessments: Users can take assessments and quizzes to evaluate their understanding of the course material.
-Instructor Interaction: Users can interact with instructors through messaging or discussion forums.
-User Authentication: Secure user authentication system for user registration and login.
-Frontend: Developed using React for a dynamic and interactive user interface.
-Backend: Powered by MongoDB, providing a scalable and flexible database solution.
-
-Usage
-Register/Login: Users can register for a new account or log in with existing credentials.
-Explore Courses: Browse through available courses and learning materials.
-Take Assessments: Complete quizzes and assessments to test your understanding.
-Interact with Instructors: Use the messaging or discussion forums to communicate with instructors and peers.
-Track Progress: Monitor your progress within courses and assessments.
+Our Car Trading Platform provides the following features:
+1.	User Authentication: Users can register, log in, and log out. Different roles are available, including admin, seller, and buyer.
+2.	Car Listing: Sellers can list cars for sale, providing details such as make, model, year, price, and description.
+3.	Car Browsing: Buyers can browse available car listings, filter by make, model, and year, and view detailed information about each car.
+4.	Contact Sellers: Buyers can contact sellers through the platform for further inquiries or to initiate the purchase process.
+5.	Admin Panel: Admin users have access to an admin panel for managing users, listings, and other aspects of the platform.
