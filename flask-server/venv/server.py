@@ -191,39 +191,6 @@ def add_car():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-'''
-@app.route('/get_cars')
-def get_cars():
-    try:
-        # Query all cars from the database
-        cars = Car.query.all()
-
-        # Serialize the cars data to a format that can be sent as JSON
-        serialized_cars = []
-        for car in cars:
-            serialized_car = {
-                'vinNumber': car.vinNumber,
-                'engNumber': car.engNumber,
-                'make': car.make,
-                'model': car.model,
-                'regDate': car.regDate.isoformat() if car.regDate else None,
-                'color': car.color,
-                'bodyType': car.bodyType,
-                'gearBoxType': car.gearBoxType,
-                'price': car.price,
-                'description': car.description,
-                'userID': car.userID,
-                'mileage': car.mileage,
-                'imageData': car.imageData.decode('utf-8') if car.imageData else None  # Assuming imageData is a base64-encoded string
-            }
-            serialized_cars.append(serialized_car)
-
-        return jsonify(serialized_cars), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-        '''
-
 import base64
 
 @app.route('/get_cars')
