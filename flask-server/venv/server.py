@@ -4,12 +4,24 @@ from flask_login import LoginManager, login_required, UserMixin, login_user, log
 import mysql.connector
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import LargeBinary
+from sqlalchemy import LargeBinary, func
+import base64
+from flask import Flask
+from flask_mail import Mail, Message
 
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'  # Set a secret key for Flash messages
 
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'hamonymakumbirofa@gmail.com'
+app.config['MAIL_PASSWORD'] = 'keto dyiu utmt nafq'
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+
+mail = Mail(app)
 # Initialize Flask extensions
 bcrypt = Bcrypt(app)
 CORS(app)
@@ -50,8 +62,6 @@ class Car(db.Model):
     def __repr__(self):
         return f"Car(vinNumber={self.vinNumber}, make={self.make}, model={self.model}, regDate={self.regDate}, color={self.color}, bodyType={self.bodyType}, gearBoxType={self.gearBoxType}, price={self.price}, description={self.description}, userID={self.userID}, mileage={self.mileage})"
 
-
-
 # Loader function for Flask-Login
 @login_manager.user_loader
 def load_user(userID):
@@ -79,12 +89,10 @@ def submit_form():
         username = request.form.get('username')
         password = request.form.get('password')
 
-        # Do something with the form data
         return f'Username: {username}, Password: {password}'
     else:
         return 'Method not allowed'
 
-# Route for user signup    
 @app.route('/signup', methods=['POST'])
 def signup():
 
@@ -93,28 +101,34 @@ def signup():
     userName = data.get('userName')
     userType = data.get('userType')
     password = data.get('password')
+    email = data.get('email')
+    phone = data.get('phone')
 
     # Check if all required fields are provided
-    if not userName or not userType or not password:
+    if not userName or not userType or not password or not email or not phone :
         flash('Invalid form data. Please provide all required fields.', 'error')
         return redirect(url_for('login'))
+
+    # Determine isActive based on userType
+    isActive = 0 if userType in ['Seller', 'Admin'] else 1
 
     # Proceed with signup process
     hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
     insert_query = '''
-        INSERT INTO User (userName, UserType, Password)
-        VALUES (%s, %s, %s)
+        INSERT INTO User (userName, UserType, Password, email, phone, isActive)
+        VALUES (%s, %s, %s, %s, %s, %s)
     '''
     cursor = mysql.cursor()
-    cursor.execute(insert_query, (userName, userType, hashed_password))
+    cursor.execute(insert_query, (userName, userType, hashed_password, email, phone, isActive))
     mysql.commit()
 
     # Flash success message and redirect to login page
     flash('Signup successful! Please login.', 'success')
-    #return jsonify({'redirect': '/login'})
+    # return jsonify({'redirect': '/login'})
 
-    return jsonify({'result':True})
+    return jsonify({'result': True})
+
 
 # Route for user login    
 @app.route('/login', methods=['GET', 'POST'])
@@ -143,11 +157,12 @@ def login():
 
         # Redirect based on user type
         if session['userType'] == "Seller":
-            return jsonify({'redirect': '/seller'})
+            return jsonify({'redirect': '/SellerDashboard'})
         elif session['userType'] == "Buyer":
-            return jsonify({'redirect': '/buyer'})
+            return jsonify({'redirect': '/BuyerDashboard'})
         elif session['userType'] == "Admin":
-            return jsonify({'redirect': '/admin'})
+
+            return jsonify({'redirect': '/AdminDashboard'})
     else:
         return jsonify({'error': 'Invalid username or password.'}), 401
 
@@ -191,8 +206,6 @@ def add_car():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-import base64
-
 @app.route('/get_cars')
 def get_cars():
     try:
@@ -223,6 +236,133 @@ def get_cars():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/send_email', methods=['POST'])
+def send_email():
+    try:
+        # Get form data from the request
+        data = request.get_json()
+        name = data.get('name')
+        email = data.get('email')
+        message = data.get('message')
+
+        # Construct the email
+        msg = Message('Contact Form Submission', sender='hamonymakumbirofa@gmail.com', recipients=['hamonymakumbirofa@gmail.com'])
+        msg.body = f"The following client is interested in your Car:\nName: {name}\nEmail: {email}\nMessage: {message}"
+
+        # Send the email
+        mail.send(msg)
+
+        return jsonify({'message': 'Email sent successfully!'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# Route to fetch unique makes from the database
+@app.route('/makes', methods=['GET'])
+def get_unique_makes():
+    try:
+        # Query distinct makes from the Car table
+        unique_makes = db.session.query(Car.make).distinct().all()
+        makes_list = [make[0] for make in unique_makes]
+        return jsonify(makes_list), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/models', methods=['GET'])
+def get_models():
+    try:
+        selected_make = request.args.get('make')
+
+        # Query models associated with the selected make from the Car table
+        models = Car.query.filter_by(make=selected_make).with_entities(Car.model).distinct().all()
+        model_list = [model[0] for model in models]
+
+        return jsonify(model_list), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/filter_cars', methods=['GET'])
+def filter_cars():
+    try:
+        # Get filter parameters from the request
+        make = request.args.get('make')
+        model = request.args.get('model')
+        min_price = request.args.get('min_price')
+        max_price = request.args.get('max_price')
+        start_year = request.args.get('start_year')
+
+        # Start building the query
+        query = Car.query
+
+        # Add filters based on provided parameters
+        if make:
+            query = query.filter(Car.make == make)
+        if model:
+            query = query.filter(Car.model == model)
+        if min_price:
+            query = query.filter(Car.price >= float(min_price))
+        if max_price:
+            query = query.filter(Car.price <= float(max_price))
+        if start_year:
+            query = query.filter(func.year(Car.regDate) >= int(start_year))
+
+        # Execute the query and fetch the filtered cars
+        filtered_cars = query.all()
+
+        # Serialize the filtered cars data
+        serialized_cars = []
+        for car in filtered_cars:
+            serialized_car = {
+                'vinNumber': car.vinNumber,
+                'engNumber': car.engNumber,
+                'make': car.make,
+                'model': car.model,
+                'regDate': car.regDate.isoformat() if car.regDate else None,
+                'color': car.color,
+                'bodyType': car.bodyType,
+                'gearBoxType': car.gearBoxType,
+                'price': car.price,
+                'description': car.description,
+                'userID': car.userID,
+                'mileage': car.mileage,
+                'imageData': base64.b64encode(car.imageData).decode('utf-8') if car.imageData else None
+            }
+            serialized_cars.append(serialized_car)
+
+        return jsonify(serialized_cars), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/sellers', methods=['GET'])
+def get_sellers():
+    cursor = mysql.cursor()
+    cursor.execute('SELECT * FROM User WHERE userType = "Seller"')
+    sellers = cursor.fetchall()
+    cursor.close()
+    return jsonify(sellers)
+
+@app.route('/buyers', methods=['GET'])
+def get_buyers():
+    cursor = mysql.cursor()
+    cursor.execute('SELECT * FROM User WHERE userType = "Buyer"')
+    buyers = cursor.fetchall()
+    cursor.close()
+    return jsonify(buyers)
+
+@app.route('/toggleStatus/<int:user_id>', methods=['POST'])
+def toggle_status(user_id):
+    # Get the current status of the user from the database
+    cursor = mysql.cursor()
+    cursor.execute('SELECT isActive FROM User WHERE userID = %s', (user_id,))
+    current_status = cursor.fetchone()[0]
+
+    # Toggle the status and update the database
+    new_status = 1 if not current_status else 0
+    cursor.execute('UPDATE User SET isActive = %s WHERE userID = %s', (new_status, user_id))
+    mysql.commit()
+
+    # Return the new status to the frontend
+    return jsonify({'isActive': new_status})
 
 
 if __name__ == '__main__':
