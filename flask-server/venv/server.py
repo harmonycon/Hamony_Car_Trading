@@ -1,18 +1,15 @@
-from flask import Flask, request, jsonify, redirect, url_for, session, flash
+from flask import Flask, request, jsonify,  session, flash, redirect, url_for
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_required, UserMixin, login_user, logout_user, current_user
-import mysql.connector
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import LargeBinary, func
-import base64
-from flask import Flask
 from flask_mail import Mail, Message
+import base64
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'  # Set a secret key for Flash messages
-
+app.config['SECRET_KEY'] = 'car_trader_flush_key'
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
@@ -20,28 +17,71 @@ app.config['MAIL_USERNAME'] = 'hamonymakumbirofa@gmail.com'
 app.config['MAIL_PASSWORD'] = 'keto dyiu utmt nafq'
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USE_SSL'] = False
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://admin:admin@127.0.0.1/car_trading' 
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-mail = Mail(app)
+
 # Initialize Flask extensions
+db = SQLAlchemy(app)
+mail = Mail(app)
 bcrypt = Bcrypt(app)
 CORS(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# MySQL database connection
-mysql = mysql.connector.connect(user='admin', password='admin', host='127.0.0.1', database='car_trading')
+# Define a function to check if the user is logged in
+def check_login():
+    # Check if the current user is not authenticated and the requested route is not the login or signup route
+    if not current_user.is_authenticated and request.endpoint not in ['login', 'signup']:
+        # Redirect the user to the login page
+        return redirect(url_for('login'))
+
+# Register the check_login function to be executed before each request
+app.before_request(check_login)
 
 # User class for Flask-Login
-class User(UserMixin):
-    def __init__(self, userID, userName, userType):
-        self.id = userID
+
+class User(UserMixin, db.Model):
+    __tablename__ = 'user'
+    
+    userID = db.Column(db.Integer, primary_key=True)
+    userName = db.Column(db.String(100), unique=True, nullable=False)
+    userType = db.Column(db.String(50), nullable=False)
+    password = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(100), nullable=False)
+    phone = db.Column(db.String(15), nullable=False)
+    isActive = db.Column(db.Integer, default=0)
+
+    def __init__(self, userID, userName, userType, password, email, phone, isActive=0):
+        self.userID = userID
         self.userName = userName
         self.userType = userType
+        self.password = password
+        self.email = email
+        self.phone = phone
+        self.isActive = isActive
+
+    def __repr__(self):
+        return f"User(userID={self.userID}, userName={self.userName}, userType={self.userType}, password={self.password}, email={self.email}, phone={self.phone}, isActive={self.isActive})"
+    
+    # Flask-Login attributes and methods
+    def is_active(self):
+        return self.isActive
+    
+    def get_id(self):
+        return (self.userID)
+    
+    def serialize(self):
+        return {
+            'id': self.userID,
+            'name': self.userName,       
+            'email': self.email,     
+            'userType': self.userType,
+            'isActive': self.isActive
+    }
+
 
 # cars code
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://admin:admin@127.0.0.1/car_trading' 
-db = SQLAlchemy(app)
-
 class Car(db.Model):
     vinNumber = db.Column(db.String(100), primary_key=True)
     engNumber = db.Column(db.String(100))
@@ -56,6 +96,7 @@ class Car(db.Model):
     userID = db.Column(db.Integer)
     mileage = db.Column(db.Integer)
     imageData = db.Column(db.LargeBinary)
+    isActive = 1
 
     __tablename__ = 'cars'
 
@@ -73,15 +114,8 @@ def load_user(userID):
 
 # Database query function to get user by ID
 def query_user_by_id(userID):
-    select_query = 'SELECT * FROM User WHERE userID = %s'
-    cursor = mysql.cursor()
-    cursor.execute(select_query, (userID,))
-    user = cursor.fetchone()
-    
-    if user:
-        return User(user[0], user[1], user[2])
-    else:
-        return None
+    return User.query.get(userID)
+   
 @app.route('/submit', methods=['POST'])
 def submit_form():
     if request.method == 'POST':
@@ -94,46 +128,34 @@ def submit_form():
         return 'Method not allowed'
 
 @app.route('/signup', methods=['POST'])
-def signup():
-
-    # Extract JSON data from the request
-    data = request.get_json()
-    userName = data.get('userName')
-    userType = data.get('userType')
-    password = data.get('password')
-    email = data.get('email')
-    phone = data.get('phone')
-
-    # Check if all required fields are provided
-    if not userName or not userType or not password or not email or not phone :
-        flash('Invalid form data. Please provide all required fields.', 'error')
-        return redirect(url_for('login'))
-
-    # Determine isActive based on userType
-    isActive = 0 if userType in ['Seller', 'Admin'] else 1
-
-    # Proceed with signup process
-    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-
-    insert_query = '''
-        INSERT INTO User (userName, UserType, Password, email, phone, isActive)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    '''
-    cursor = mysql.cursor()
-    cursor.execute(insert_query, (userName, userType, hashed_password, email, phone, isActive))
-    mysql.commit()
-
-    # Flash success message and redirect to login page
-    flash('Signup successful! Please login.', 'success')
-    # return jsonify({'redirect': '/login'})
-
-    return jsonify({'result': True})
 
 
-# Route for user login    
+def signup(): 
+    try:
+        # Extract JSON data from the request
+        data = request.get_json()
+        userName = data.get('userName')
+        userType = data.get('userType')
+        password = data.get('password')
+        email = data.get('email')
+        phone = data.get('phone')
+        # Determine isActive based on userType
+        isActive = 0 if userType in ['Seller', 'Admin'] else 1
+
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        new_user = User(userName=userName, userType=userType, password=hashed_password, email=email, phone=phone, isActive=isActive)
+        db.session.add(new_user)
+        db.session.commit()
+
+        # Flash success message and redirect to login page
+        flash('Signup successful! Please login.', 'success')
+        return jsonify({'redirect': '/login'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    
+# Route for user login  
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-
     # Extract JSON data from the request
     data = request.get_json()
     userName = data.get('userName')
@@ -143,28 +165,26 @@ def login():
     if not (userName and userType and password):
         return jsonify({'error': 'Invalid form data.'}), 400
 
-    select_query = 'SELECT * FROM User WHERE userName = %s AND userType = %s'
-    cursor = mysql.cursor()
-    cursor.execute(select_query, (userName, userType))
-    user = cursor.fetchone()
+    # Query the User model
+    user = User.query.filter_by(userName=userName, userType=userType).first()
 
-    if user and bcrypt.check_password_hash(user[3], password):
-        session['userID'] = user[0]
-        session['userName'] = user[1]
-        session['userType'] = user[2]
+    if user and bcrypt.check_password_hash(user.password, password):
+        session['userID'] = user.userID
+        session['userName'] = user.userName
+        session['userType'] = user.userType
 
-        login_user(User(user[0], user[1], user[2]))
+        login_user(user)
 
         # Redirect based on user type
-        if session['userType'] == "Seller":
+        if user.userType == "Seller":
             return jsonify({'redirect': '/SellerDashboard'})
-        elif session['userType'] == "Buyer":
+        elif user.userType == "Buyer":
             return jsonify({'redirect': '/BuyerDashboard'})
-        elif session['userType'] == "Admin":
-
+        elif user.userType == "Admin":
             return jsonify({'redirect': '/AdminDashboard'})
     else:
         return jsonify({'error': 'Invalid username or password.'}), 401
+
 
 # Route for user logout
 @app.route('/logout', methods=['POST'])
@@ -190,7 +210,7 @@ def add_car():
         gearBoxType = request.form.get('gearBoxType')
         price = float(request.form.get('price'))
         description = request.form.get('description')
-        userID = request.form.get('userID')
+        userID = int(session.get('userID'))
         mileage = request.form.get('mileage')
         
         # Get image data
@@ -333,36 +353,70 @@ def filter_cars():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
+    # Serialize function to convert the output to a dictionary
+
 @app.route('/sellers', methods=['GET'])
 def get_sellers():
-    cursor = mysql.cursor()
-    cursor.execute('SELECT * FROM User WHERE userType = "Seller"')
-    sellers = cursor.fetchall()
-    cursor.close()
-    return jsonify(sellers)
+    sellers = User.query.filter_by(userType="Seller").all()
+    return jsonify([seller.serialize() for seller in sellers])
 
 @app.route('/buyers', methods=['GET'])
 def get_buyers():
-    cursor = mysql.cursor()
-    cursor.execute('SELECT * FROM User WHERE userType = "Buyer"')
-    buyers = cursor.fetchall()
-    cursor.close()
-    return jsonify(buyers)
+    buyers = User.query.filter_by(userType="Buyer").all()
+    return jsonify([buyer.serialize() for buyer in buyers])
 
 @app.route('/toggleStatus/<int:user_id>', methods=['POST'])
 def toggle_status(user_id):
-    # Get the current status of the user from the database
-    cursor = mysql.cursor()
-    cursor.execute('SELECT isActive FROM User WHERE userID = %s', (user_id,))
-    current_status = cursor.fetchone()[0]
+    # Get the user by ID
+    user = User.query.get(user_id)
+    
+    # Check if the user exists
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
 
-    # Toggle the status and update the database
-    new_status = 1 if not current_status else 0
-    cursor.execute('UPDATE User SET isActive = %s WHERE userID = %s', (new_status, user_id))
-    mysql.commit()
+    # Toggle the status
+    user.isActive = not user.isActive
+
+    # Commit the changes to the database
+    db.session.commit()
 
     # Return the new status to the frontend
-    return jsonify({'isActive': new_status})
+    return jsonify({'isActive': user.isActive})
+
+@app.route('/myCars')
+def get_my_cars():
+    try:
+        # Get the userID from the session
+        userID = session.get('userID')
+        
+        # Query cars associated with the userID
+        cars = Car.query.filter_by(userID=userID).all()
+
+        # Serialize the cars data
+        serialized_cars = []
+        for car in cars:
+            serialized_car = {
+                'vinNumber': car.vinNumber,
+                'engNumber': car.engNumber,
+                'make': car.make,
+                'model': car.model,
+                'regDate': car.regDate.isoformat() if car.regDate else None,
+                'color': car.color,
+                'bodyType': car.bodyType,
+                'gearBoxType': car.gearBoxType,
+                'price': car.price,
+                'description': car.description,
+                'mileage': car.mileage,
+                'isActive': car.isActive,
+
+                'imageData': base64.b64encode(car.imageData).decode('utf-8') if car.imageData else None
+            }
+            serialized_cars.append(serialized_car)
+
+        return jsonify(serialized_cars), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
