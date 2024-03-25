@@ -40,7 +40,6 @@ def check_login():
 app.before_request(check_login)
 
 # User class for Flask-Login
-
 class User(UserMixin, db.Model):
     __tablename__ = 'user'
     
@@ -154,7 +153,8 @@ def signup():
         return jsonify({'error': str(e)}), 400
     
 # Route for user login  
-@app.route('/login', methods=['GET', 'POST'])
+
+@app.route('/login', methods=['POST'])
 def login():
     # Extract JSON data from the request
     data = request.get_json()
@@ -169,11 +169,7 @@ def login():
     user = User.query.filter_by(userName=userName, userType=userType).first()
 
     if user and bcrypt.check_password_hash(user.password, password):
-        session['userID'] = user.userID
-        session['userName'] = user.userName
-        session['userType'] = user.userType
-
-        login_user(user)
+        login_user(user)  # Use Flask-Login's login_user function
 
         # Redirect based on user type
         if user.userType == "Seller":
@@ -184,6 +180,20 @@ def login():
             return jsonify({'redirect': '/AdminDashboard'})
     else:
         return jsonify({'error': 'Invalid username or password.'}), 401
+
+from flask_login import current_user
+
+@app.route('/session-details', methods=['GET'])
+@login_required  # Protect the route with authentication
+def get_session_details():
+    if current_user.is_authenticated:
+        return jsonify({
+            'userID': current_user.userID,
+            'userName': current_user.userName,
+            'userType': current_user.userType
+        }), 200
+    else:
+        return jsonify({'error': 'User not authenticated'}), 401
 
 
 # Route for user logout
@@ -198,6 +208,7 @@ def logout():
 from flask import request, jsonify
 
 @app.route('/add_car', methods=['POST'])
+@login_required
 def add_car():
     try:
         vinNumber = request.form.get('vinNumber')
@@ -210,7 +221,7 @@ def add_car():
         gearBoxType = request.form.get('gearBoxType')
         price = float(request.form.get('price'))
         description = request.form.get('description')
-        userID = int(session.get('userID'))
+        userID = current_user.userID
         mileage = request.form.get('mileage')
         
         # Get image data
@@ -258,6 +269,7 @@ def get_cars():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/send_email', methods=['POST'])
+@login_required
 def send_email():
     try:
         # Get form data from the request
@@ -300,60 +312,6 @@ def get_models():
         return jsonify(model_list), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
-@app.route('/filter_cars', methods=['GET'])
-def filter_cars():
-    try:
-        # Get filter parameters from the request
-        make = request.args.get('make')
-        model = request.args.get('model')
-        min_price = request.args.get('min_price')
-        max_price = request.args.get('max_price')
-        start_year = request.args.get('start_year')
-
-        # Start building the query
-        query = Car.query
-
-        # Add filters based on provided parameters
-        if make:
-            query = query.filter(Car.make == make)
-        if model:
-            query = query.filter(Car.model == model)
-        if min_price:
-            query = query.filter(Car.price >= float(min_price))
-        if max_price:
-            query = query.filter(Car.price <= float(max_price))
-        if start_year:
-            query = query.filter(func.year(Car.regDate) >= int(start_year))
-
-        # Execute the query and fetch the filtered cars
-        filtered_cars = query.all()
-
-        # Serialize the filtered cars data
-        serialized_cars = []
-        for car in filtered_cars:
-            serialized_car = {
-                'vinNumber': car.vinNumber,
-                'engNumber': car.engNumber,
-                'make': car.make,
-                'model': car.model,
-                'regDate': car.regDate.isoformat() if car.regDate else None,
-                'color': car.color,
-                'bodyType': car.bodyType,
-                'gearBoxType': car.gearBoxType,
-                'price': car.price,
-                'description': car.description,
-                'userID': car.userID,
-                'mileage': car.mileage,
-                'imageData': base64.b64encode(car.imageData).decode('utf-8') if car.imageData else None
-            }
-            serialized_cars.append(serialized_car)
-
-        return jsonify(serialized_cars), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    
-    # Serialize function to convert the output to a dictionary
 
 @app.route('/sellers', methods=['GET'])
 def get_sellers():
@@ -383,12 +341,29 @@ def toggle_status(user_id):
     # Return the new status to the frontend
     return jsonify({'isActive': user.isActive})
 
+@app.route('/toggleCarStatus/<string:vinNumber>', methods=['POST'])
+def toggle_car_status(vinNumber):
+    # Get the car by VIN number
+    car = Car.query.filter_by(vinNumber=vinNumber).first()
+    
+    # Check if the car exists
+    if not car:
+        return jsonify({'error': 'Car not found'}), 404
+
+    # Toggle the status
+    car.isActive = not car.isActive
+
+    # Commit the changes to the database
+    db.session.commit()
+
+    # Return the new status to the frontend
+    return jsonify({'isActive': car.isActive})
+
 @app.route('/myCars')
 def get_my_cars():
     try:
         # Get the userID from the session
-        userID = session.get('userID')
-        
+        userID = current_user.userID
         # Query cars associated with the userID
         cars = Car.query.filter_by(userID=userID).all()
 
@@ -418,13 +393,9 @@ def get_my_cars():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-from flask import request, jsonify
-
 @app.route('/update_car/<string:vin_number>', methods=['PUT'])
 def update_car(vin_number):
     try:
-        # Use vin_number instead of vinNumber
         vinNumber = vin_number
         engNumber = request.form.get('engNumber')
         make = request.form.get('make')
@@ -435,7 +406,7 @@ def update_car(vin_number):
         gearBoxType = request.form.get('gearBoxType')
         price = float(request.form.get('price'))
         description = request.form.get('description')
-        userID = int(session.get('userID'))
+        userID = current_user.userID
         mileage = request.form.get('mileage')
         
         # Get image data
@@ -467,22 +438,35 @@ def update_car(vin_number):
         return jsonify({'message': 'Car updated successfully!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 400
-
+    
+@app.route('/update_car_status/<vinNumber>', methods=['POST'])
+def update_car_status(vinNumber):
+    try:
+        action = request.json.get('action')
+        car = Car.query.filter_by(vinNumber=vinNumber).first()
+        if car:
+            if action == 'enable':
+                car.isActive = 1
+            elif action == 'disable':
+                car.isActive = 0
+            db.session.commit()
+            return jsonify({'message': 'Car updated successfully.'}), 200
+        else:
+            return jsonify({'error': 'Car not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
 # Route to delete a car
-@app.route('/deleteCar/<string:vinNumber>', methods=['DELETE'])
+@app.route('/delete_car/<vinNumber>', methods=['DELETE'])
 def delete_car(vinNumber):
     try:
-        # Find the car to delete
         car = Car.query.filter_by(vinNumber=vinNumber).first()
-
-        if not car:
+        if car:
+            db.session.delete(car)
+            db.session.commit()
+            return jsonify({'message': 'Car deleted successfully.'}), 200
+        else:
             return jsonify({'error': 'Car not found'}), 404
-
-        # Delete the car from the database
-        db.session.delete(car)
-        db.session.commit()
-
-        return jsonify({'message': 'Car deleted successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -497,14 +481,12 @@ def mark_as_sold(vinNumber):
             return jsonify({'error': 'Car not found'}), 404
 
         # Update the car's sold status
-        car.isActive = 0  # Assuming 0 means sold, update accordingly based on your schema
+        car.isActive = 0  
         db.session.commit()
 
         return jsonify({'message': 'Car marked as sold successfully!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-# Import necessary modules
-from flask import request, jsonify
 
 # Define the route for updating user profiles
 @app.route('/userUpdate/<string:user_id>', methods=['PUT'])
@@ -544,7 +526,7 @@ def user_update(user_id):
 def get_user_by_username():
     try:
         # Retrieve the userName from the session
-        userName = session.get('userName')
+        userName = current_user.userName
         
         # Query the user by userName from the database
         user = User.query.filter_by(userName=userName).first()
@@ -560,7 +542,6 @@ def get_user_by_username():
             'userType': user.userType,
             'email': user.email,
             'phone': user.phone
-            # Add other fields as needed
         }
 
         # Return the user information
@@ -623,6 +604,7 @@ def filter_cars():
         return jsonify(serialized_cars), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
