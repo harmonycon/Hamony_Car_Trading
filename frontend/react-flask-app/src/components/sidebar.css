@@ -1,0 +1,10 @@
+.sidebar-links {
+    display: flex;
+    justify-content:center;
+    padding: 20px;
+    margin-left: 20px;  
+}
+
+.sb-Link {
+    margin-right: 20px;
+}

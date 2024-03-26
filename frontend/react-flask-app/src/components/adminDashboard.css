@@ -1,0 +1,21 @@
+
+.admin-view {
+    width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .container {
+    height: 400px;
+    width: 500px;
+    padding: 60px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    margin: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  
+  }

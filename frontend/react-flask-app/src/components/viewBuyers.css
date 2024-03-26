@@ -1,0 +1,30 @@
+/* viewBuyersers.css */
+
+/* Style the table */
+.view-buyers table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .view-buyers th,
+  .view-buyers td {
+    padding: 10px;
+    border: 1px solid #ddd;
+  }
+  
+  /* Style the status button */
+  .status-button {
+    padding: 5px 10px;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .status-button.enabled {
+    background-color: #f44336;
+    color: white;
+  }
+  
+  .status-button.disabled {
+    background-color: #4caf50;
+    color: white;
+  }

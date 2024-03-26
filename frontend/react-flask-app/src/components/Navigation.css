@@ -1,0 +1,46 @@
+/* Navigation.css */
+.navigation {
+  padding: 10px 0;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+ul li {
+  margin-right: 20px;
+}
+
+ul li a {
+  color: blue; /* Change font color to blue */
+  text-decoration: none;
+}
+
+.user-dropdown {
+  position: relative;
+}
+
+.user-dropdown .dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+
+  padding: 10px 0;
+}
+
+.user-dropdown:hover .dropdown-menu {
+  display: block;
+}
+
+.dropdown-menu li {
+  padding: 10px;
+}
+
+.dropdown-menu li:hover {
+  background-color: #555;
+}
