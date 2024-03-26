@@ -605,6 +605,5 @@ def filter_cars():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-#Testing
 if __name__ == '__main__':
     app.run(debug=True)
