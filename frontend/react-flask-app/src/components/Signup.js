@@ -43,11 +43,11 @@ const Signup = () => {
   };
 
   return (
-    <div className="container">
+    <div className="signup-container">
       {signupSuccess ? (
         <Login />
       ) : (
-        <div className="signup-container">
+        <div className="signup-form-container">
           <h2>Signup</h2>
           <form onSubmit={handleSubmit}>
             {/* User Name input field */}
